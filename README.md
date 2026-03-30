@@ -30,9 +30,3 @@ Designed for basic reconnaissance, port scanning, and web security analysis.
 ### CLI Version
 ```bash
 python scanner.py
-## 📸 Screenshots
-
-![CLI](screenshots/CLI.png)
-![GUI](screenshots/GUI%201.png)
-![GUI](screenshots/GUI%202.png)
-
