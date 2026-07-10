@@ -5,10 +5,42 @@ import socket
 import urllib.parse
 import http.server
 import time
+import uuid
+import threading
 import requests
+from scan_engine import ScanEngine, REPORTS_DIR
 
 PORT = int(os.environ.get('PORT', 80))
 WEB_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'web')
+
+# Global database for background scans
+scans = {}
+scans_lock = threading.Lock()
+
+def run_background_scan(scan_id, target_url, ports_to_scan):
+    def log_cb(text, tag):
+        with scans_lock:
+            if scan_id in scans:
+                scans[scan_id]["logs"].append({"text": text, "tag": tag})
+                
+    def progress_cb(pct):
+        with scans_lock:
+            if scan_id in scans:
+                scans[scan_id]["percent"] = pct
+
+    engine = ScanEngine(target_url, ports_to_scan, log_callback=log_cb, progress_callback=progress_cb)
+    try:
+        stats = engine.execute_scan()
+        with scans_lock:
+            if scan_id in scans:
+                scans[scan_id]["status"] = "completed"
+                scans[scan_id]["stats"] = stats
+                scans[scan_id]["percent"] = 100
+    except Exception as e:
+        with scans_lock:
+            if scan_id in scans:
+                scans[scan_id]["status"] = "failed"
+                scans[scan_id]["error"] = str(e)
 
 class VulnerabilityScannerHandler(http.server.BaseHTTPRequestHandler):
     def log_message(self, format, *args):
@@ -32,8 +64,32 @@ class VulnerabilityScannerHandler(http.server.BaseHTTPRequestHandler):
             self.serve_file(os.path.join(WEB_DIR, 'app.js'), 'application/javascript')
         elif path == '/api/scan':
             self.handle_scan(query)
+        elif path.startswith('/reports/'):
+            filename = os.path.basename(path)
+            report_path = os.path.join(REPORTS_DIR, filename)
+            self.serve_file(report_path, 'text/html')
+        elif path.startswith('/api/scan/'):
+            parts = path.strip('/').split('/')
+            if len(parts) == 4:
+                scan_id = parts[2]
+                endpoint = parts[3]
+                if endpoint == 'status':
+                    self.handle_api_status(scan_id)
+                    return
+                elif endpoint == 'report':
+                    self.handle_api_report(scan_id)
+                    return
+            self.send_error(404, "Endpoint not found")
         else:
             self.send_error(404, "File not found")
+
+    def do_POST(self):
+        parsed_url = urllib.parse.urlparse(self.path)
+        path = parsed_url.path
+        if path == '/api/scan':
+            self.handle_api_scan_post()
+        else:
+            self.send_error(404, "Endpoint not found")
 
     def serve_file(self, file_path, content_type):
         try:
@@ -97,163 +153,121 @@ class VulnerabilityScannerHandler(http.server.BaseHTTPRequestHandler):
         def update_progress(pct):
             return self.send_sse_event('progress', {'percent': pct})
 
-        # Initiate scan representation
-        if not log_to_client("┌─────────────────────────────────────────────────┐\n", "dim"): return
-        if not log_to_client("│  VULNSC RECON ENGINE  v2.0.1 (Web Edition)     │\n", "purple"): return
-        if not log_to_client("└─────────────────────────────────────────────────┘\n", "dim"): return
-        if not log_to_client(f"\n  TARGET   ", "dim"): return
-        if not log_to_client(f"{target_url}\n", "bright"): return
-        if not log_to_client(f"  TIME     ", "dim"): return
-        if not log_to_client(f"{time.strftime('%Y-%m-%d %H:%M:%S')}\n\n", "dim"): return
-
-        # ── 1. Protocol check ────────────────────────────────────────
-        update_progress(10)
-        if not log_to_client("  [1/4]  ", "accent"): return
-        if not log_to_client("PROTOCOL CHECK\n", "bright"): return
+        # Run scan using ScanEngine
+        engine = ScanEngine(target_url, ports_to_scan, log_callback=log_to_client, progress_callback=update_progress)
+        stats = engine.execute_scan()
         
-        is_https = target_url.startswith("https://")
-        if is_https:
-            if not log_to_client("         ✔  TLS/HTTPS", "green"): return
-            if not log_to_client("  — encrypted transport\n", "dim"): return
-        else:
-            if not log_to_client("         ✘  PLAIN HTTP", "red"): return
-            if not log_to_client("  — traffic is unencrypted!\n", "yellow"): return
-
-        # Extract Hostname
-        host = target_url.replace("https://","").replace("http://","").split("/")[0]
-        host_ip = host.split(":")[0]
-        if not log_to_client(f"         HOST  ", "dim"): return
-        if not log_to_client(f"{host_ip}\n\n", "accent"): return
-
-        # ── 2. Port scan ──────────────────────────────────────────
-        update_progress(35)
-        if not log_to_client("  [2/4]  ", "accent"): return
-        if not log_to_client("PORT SCAN\n", "bright"): return
-        
-        open_ports = []
-        closed_ports = []
-        unreachable_ports = []
-
-        for port in ports_to_scan:
-            try:
-                s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-                s.settimeout(1.0)
-                res = s.connect_ex((host_ip, port))
-                if res == 0:
-                    open_ports.append(port)
-                    if not log_to_client(f"         ◉  {port:<6}", "green"): return
-                    if not log_to_client("OPEN\n", "green"): return
-                else:
-                    closed_ports.append(port)
-                    if not log_to_client(f"         ○  {port:<6}", "dim"): return
-                    if not log_to_client("closed\n", "dim"): return
-                s.close()
-            except Exception:
-                unreachable_ports.append(port)
-                if not log_to_client(f"         ?  {port:<6}", "yellow"): return
-                if not log_to_client("unreachable\n", "dim"): return
-            time.sleep(0.02) # spacing out for real-time responsiveness
-
-        if not log_to_client(f"\n         Summary: ", "dim"): return
-        if not log_to_client(f"{len(open_ports)} open", "green"): return
-        if not log_to_client(f"  /  {len(closed_ports) + len(unreachable_ports)} closed\n\n", "dim"): return
-
-        # ── 3. Path scan ──────────────────────────────────────────
-        update_progress(65)
-        if not log_to_client("  [3/4]  ", "accent"): return
-        if not log_to_client("PATH DISCOVERY\n", "bright"): return
-
-        paths = ["/admin", "/login", "/wp-admin", "/dashboard",
-                 "/api", "/config", "/.env", "/backup"]
-        found_paths = []
-        redirect_paths = []
-        base = target_url.rstrip("/")
-
-        for path in paths:
-            try:
-                res = requests.get(base + path, timeout=4,
-                                   headers={"User-Agent": "Mozilla/5.0"},
-                                   allow_redirects=False)
-                code = res.status_code
-                if code == 200:
-                    found_paths.append(path)
-                    if not log_to_client(f"         ◉  {path:<20}", "red"): return
-                    if not log_to_client(f"  {code} FOUND\n", "red"): return
-                elif code in (301, 302, 307, 308):
-                    redirect_paths.append(path)
-                    if not log_to_client(f"         →  {path:<20}", "yellow"): return
-                    if not log_to_client(f"  {code} REDIRECT\n", "dim"): return
-                else:
-                    if not log_to_client(f"         ○  {path:<20}", "dim"): return
-                    if not log_to_client(f"  {code}\n", "dim"): return
-            except Exception:
-                if not log_to_client(f"         ×  {path:<20}", "dim"): return
-                if not log_to_client("  timeout/error\n", "dim"): return
-            time.sleep(0.02)
-
-        if not log_to_client(f"\n         Exposed paths: ", "dim"): return
-        if found_paths:
-            if not log_to_client(f"{len(found_paths)} detected\n\n", "red"): return
-        else:
-            if not log_to_client("none detected\n\n", "green"): return
-
-        # ── 4. Server info ────────────────────────────────────────
-        update_progress(85)
-        if not log_to_client("  [4/4]  ", "accent"): return
-        if not log_to_client("HEADER FINGERPRINTING\n", "bright"): return
-
-        headers_found = {}
-        try:
-            res = requests.get(base, timeout=5, headers={"User-Agent": "Mozilla/5.0"})
-            interesting = ["Server","X-Powered-By","X-Frame-Options",
-                           "Content-Security-Policy","Strict-Transport-Security",
-                           "X-Content-Type-Options","Access-Control-Allow-Origin"]
-            for h in interesting:
-                val = res.headers.get(h)
-                headers_found[h] = val
-                if val:
-                    tag = "dim" if h in ("Server","X-Powered-By") else "green"
-                    if not log_to_client(f"         {h:<35}", "dim"): return
-                    if not log_to_client(f"{val[:50]}\n", tag): return
-                else:
-                    if not log_to_client(f"         {h:<35}", "dim"): return
-                    if not log_to_client("—\n", "dim"): return
-        except Exception as e:
-            if not log_to_client(f"         Error: {e}\n", "red"): return
-
-        # ── Done ─────────────────────────────────────────────
-        update_progress(100)
-        if not log_to_client("\n┌─────────────────────────────────────────────────┐\n", "dim"): return
-        if not log_to_client("│  SCAN COMPLETE                                  │\n", "green"): return
-        if not log_to_client("└─────────────────────────────────────────────────┘\n", "dim"): return
-
-        # Threat Assessment
-        threat_score = 0
-        if not is_https:
-            threat_score += 2
-        threat_score += len(open_ports)
-        threat_score += len(found_paths) * 2
-
-        if threat_score <= 1:
-            threat_level = "LOW"
-        elif threat_score <= 4:
-            threat_level = "MEDIUM"
-        else:
-            threat_level = "HIGH"
-
-        # Send statistical summary
-        stats = {
-            'https': is_https,
-            'host': host_ip,
-            'open_ports': open_ports,
-            'all_ports': ports_to_scan,
-            'exposed_paths': found_paths,
-            'all_paths': paths,
-            'headers': headers_found,
-            'threat_level': threat_level
-        }
         self.send_sse_event('stats', stats)
         self.send_sse_event('done', 'Scan complete')
+
+    def handle_api_scan_post(self):
+        try:
+            content_length = int(self.headers.get('Content-Length', 0))
+            post_data = self.rfile.read(content_length)
+            
+            # Default options
+            target_url = ""
+            ports_to_scan = [21, 22, 80, 443, 8080, 8443]
+            
+            if post_data:
+                try:
+                    # Attempt to parse JSON
+                    data = json.loads(post_data.decode('utf-8'))
+                    target_url = data.get('url', '').strip()
+                    if 'ports' in data:
+                        if isinstance(data['ports'], list):
+                            ports_to_scan = [int(p) for p in data['ports']]
+                        elif isinstance(data['ports'], str):
+                            ports_to_scan = [int(p.strip()) for p in data['ports'].split(',') if p.strip().isdigit()]
+                except Exception:
+                    # Fallback to form URL encoded if JSON parse failed
+                    try:
+                        data = urllib.parse.parse_qs(post_data.decode('utf-8'))
+                        if 'url' in data:
+                            target_url = data['url'][0].strip()
+                        if 'ports' in data:
+                            ports_to_scan = [int(p.strip()) for p in data['ports'][0].split(',') if p.strip().isdigit()]
+                    except Exception:
+                        pass
+            
+            if not target_url:
+                self.send_response(400)
+                self.send_header('Content-Type', 'application/json')
+                self.end_headers()
+                self.wfile.write(json.dumps({'error': 'URL is required'}).encode('utf-8'))
+                return
+
+            scan_id = str(uuid.uuid4())
+            with scans_lock:
+                scans[scan_id] = {
+                    "status": "running",
+                    "percent": 0,
+                    "target_url": target_url,
+                    "logs": [],
+                    "stats": None
+                }
+
+            # Start scan in a background daemon thread
+            t = threading.Thread(target=run_background_scan, args=(scan_id, target_url, ports_to_scan), daemon=True)
+            t.start()
+
+            self.send_response(201)
+            self.send_header('Content-Type', 'application/json')
+            self.end_headers()
+            self.wfile.write(json.dumps({'scan_id': scan_id, 'status': 'running'}).encode('utf-8'))
+
+        except Exception as e:
+            self.send_response(500)
+            self.send_header('Content-Type', 'application/json')
+            self.end_headers()
+            self.wfile.write(json.dumps({'error': f'Internal server error: {e}'}).encode('utf-8'))
+
+    def handle_api_status(self, scan_id):
+        with scans_lock:
+            scan = scans.get(scan_id)
+            
+        if not scan:
+            self.send_response(404)
+            self.send_header('Content-Type', 'application/json')
+            self.end_headers()
+            self.wfile.write(json.dumps({'error': 'Scan ID not found'}).encode('utf-8'))
+            return
+            
+        response = {
+            'scan_id': scan_id,
+            'status': scan['status'],
+            'percent': scan['percent']
+        }
+        if 'error' in scan:
+            response['error'] = scan['error']
+            
+        self.send_response(200)
+        self.send_header('Content-Type', 'application/json')
+        self.end_headers()
+        self.wfile.write(json.dumps(response).encode('utf-8'))
+
+    def handle_api_report(self, scan_id):
+        with scans_lock:
+            scan = scans.get(scan_id)
+            
+        if not scan:
+            self.send_response(404)
+            self.send_header('Content-Type', 'application/json')
+            self.end_headers()
+            self.wfile.write(json.dumps({'error': 'Scan ID not found'}).encode('utf-8'))
+            return
+            
+        if scan['status'] != 'completed':
+            self.send_response(400)
+            self.send_header('Content-Type', 'application/json')
+            self.end_headers()
+            self.wfile.write(json.dumps({'error': f'Scan is in state: {scan["status"]}'}).encode('utf-8'))
+            return
+            
+        self.send_response(200)
+        self.send_header('Content-Type', 'application/json')
+        self.end_headers()
+        self.wfile.write(json.dumps(scan['stats']).encode('utf-8'))
 
 def run_server():
     server_address = ('', PORT)

@@ -35,6 +35,12 @@ document.addEventListener('DOMContentLoaded', () => {
     const headersTableBody = document.getElementById('headers-table-body');
     const portsTableBody = document.getElementById('ports-table-body');
     const pathsTableBody = document.getElementById('paths-table-body');
+    const vulnsTableBody = document.getElementById('vulns-table-body');
+    const cvesTableBody = document.getElementById('cves-table-body');
+    
+    // Report Banner
+    const reportBannerContainer = document.getElementById('report-banner-container');
+    const linkDownloadReport = document.getElementById('link-download-report');
     
     // Tabs
     const tabButtons = document.querySelectorAll('.tab-btn');
@@ -123,6 +129,9 @@ document.addEventListener('DOMContentLoaded', () => {
         headersTableBody.innerHTML = `<tr><td colspan="3" class="empty-state">No headers analyzed yet.</td></tr>`;
         portsTableBody.innerHTML = `<tr><td colspan="3" class="empty-state">No ports scanned yet.</td></tr>`;
         pathsTableBody.innerHTML = `<tr><td colspan="2" class="empty-state">No path discovery results yet.</td></tr>`;
+        vulnsTableBody.innerHTML = `<tr><td colspan="4" class="empty-state">No vulnerabilities scanned yet.</td></tr>`;
+        cvesTableBody.innerHTML = `<tr><td colspan="5" class="empty-state">No service CVEs mapped yet.</td></tr>`;
+        reportBannerContainer.classList.add('hidden');
     };
     
     // Initiate Scan
@@ -164,6 +173,7 @@ document.addEventListener('DOMContentLoaded', () => {
         statusIndicator.className = 'status-indicator active';
         statusText.innerText = 'SCAN ACTIVE';
         
+        resetDashboardUI();
         clearTerminal();
         addLogLine('[i] Establishing connection with scan server...', 'dim');
         
@@ -358,6 +368,50 @@ document.addEventListener('DOMContentLoaded', () => {
             `;
             pathsTableBody.appendChild(row);
         });
+        
+        // 8. Populate Active Web Vulnerabilities Table
+        vulnsTableBody.innerHTML = '';
+        if (stats.vuln_findings && stats.vuln_findings.length > 0) {
+            stats.vuln_findings.forEach(vuln => {
+                const row = document.createElement('tr');
+                const confClass = vuln.confidence === 'HIGH' ? 'danger' : 'warn';
+                row.innerHTML = `
+                    <td style="font-weight: 700;">${vuln.type}</td>
+                    <td style="font-family: var(--font-mono); font-size: 11px; word-break: break-all;">${vuln.endpoint}</td>
+                    <td style="font-family: var(--font-mono); font-size: 11px; color: var(--text-dim); word-break: break-all;">${vuln.evidence}</td>
+                    <td><span class="badge ${confClass}">${vuln.confidence}</span></td>
+                `;
+                vulnsTableBody.appendChild(row);
+            });
+        } else {
+            vulnsTableBody.innerHTML = `<tr><td colspan="4" class="empty-state">No vulnerabilities detected.</td></tr>`;
+        }
+
+        // 9. Populate Service CVEs Table
+        cvesTableBody.innerHTML = '';
+        if (stats.cve_results && stats.cve_results.length > 0) {
+            stats.cve_results.sort((a, b) => b.cvss_score - a.cvss_score);
+            stats.cve_results.forEach(cve => {
+                const row = document.createElement('tr');
+                const sevClass = (cve.severity === 'CRITICAL' || cve.severity === 'HIGH') ? 'danger' : (cve.severity === 'MEDIUM' ? 'warn' : 'dim');
+                row.innerHTML = `
+                    <td style="font-family: var(--font-mono); font-weight: 700;">${cve.cve_id}</td>
+                    <td style="font-family: var(--font-mono); font-weight: 700; color: var(--cyan);">${cve.cvss_score}</td>
+                    <td><span class="badge ${sevClass}">${cve.severity}</span></td>
+                    <td style="font-size: 11px;">Port ${cve.port} (${cve.service})</td>
+                    <td style="font-size: 11px; color: var(--text-dim); max-width: 320px; word-break: break-word;">${cve.description}</td>
+                `;
+                cvesTableBody.appendChild(row);
+            });
+        } else {
+            cvesTableBody.innerHTML = `<tr><td colspan="5" class="empty-state">No service CVEs mapped.</td></tr>`;
+        }
+
+        // 10. Show report banner
+        if (stats.report_file) {
+            linkDownloadReport.href = `/reports/${stats.report_file}`;
+            reportBannerContainer.classList.remove('hidden');
+        }
     };
     
     // Event listeners

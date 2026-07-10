@@ -8,18 +8,53 @@ Designed for basic reconnaissance, port scanning, and web security analysis.
 ## ⚔️ Features
 
 - 🌐 **Web-based Dashboard**: Beautiful, responsive cyber-themed dashboard built with HTML, CSS, and JS.
-- ⚡ **Real-Time Log Streaming**: Uses Server-Sent Events (SSE) to stream port scans and path discoveries in real-time.
-- 🔍 **Port Scanning**: Custom scanning options for standard system ports (21, 22, 80, 443, 8080, 8443).
-- 📂 **Sensitive Path Discovery**: Automatic check for exposed system files (e.g. `/admin`, `/login`, `/.env`, `/backup`).
-- 🧾 **Header Fingerprinting**: Security evaluation of response headers (CSP, HSTS, X-Frame-Options, Server, etc.) and Threat Level assessment.
+- ⚡ **Real-Time Log Streaming**: Uses Server-Sent Events (SSE) to stream threaded scans, vulnerabilites, and CVE mappings.
+- 🔀 **Multithreaded Scan Engine**: Parallelized port scanning and directory discovery using Python `ThreadPoolExecutor` for fast results.
+- 🛡️ **CVE & CVSS Mapping**: Automatic banner grabbing on open ports matched against the NVD API v2.0 with local caching and rate-limit retry logic.
+- 🕵️ **Active Web Auditing**: Non-destructive, safe checks for SQL Injection, reflected XSS, default administrative credentials, and insecure session cookie flags.
+- 📂 **Sensitive Path Discovery**: Parallelized check for exposed folder directories (e.g., `/admin`, `/.env`, `/backup`).
+- 🧾 **Header Fingerprinting**: Evaluation of security headers (CSP, HSTS, X-Frame-Options, CORS, etc.) and global threat level assessments.
+- 📊 **Auto-Generated HTML Threat Reports**: Self-contained assessment reports saved with timestamped filenames in the `/reports` directory.
 - 🖥️ **Desktop GUI (Tkinter)** & **CLI Support**.
 
 ---
 
 ## 🛠️ Tech Stack
 
-- **Backend**: Python (standard library `http.server.ThreadingHTTPServer`, `socket`, `requests`)
+- **Backend**: Python 3 (standard libraries: `http.server.ThreadingHTTPServer`, `socket`, `concurrent.futures`, `html.parser`, `urllib.parse`, and the pre-existing `requests` package)
 - **Frontend**: HTML5, Vanilla CSS3 (Glassmorphism, custom grid overlays), JavaScript (ES6, EventSource SSE API)
+
+---
+
+## 📡 REST API Layer
+
+VULNSC includes a programmatic REST API that can be consumed directly without the browser dashboard:
+
+- **`POST /api/scan`**: Initiates a scan in the background. Returns a unique Scan ID.
+  - **Body (JSON or urlencoded)**:
+    ```json
+    {
+      "url": "http://example.com",
+      "ports": [80, 443, 8080]
+    }
+    ```
+  - **Response (201 Created)**:
+    ```json
+    {
+      "scan_id": "893d56b0-74e7-49f6-a83d-6b5e02e1fd4e",
+      "status": "running"
+    }
+    ```
+- **`GET /api/scan/{id}/status`**: Returns the current percentage and state.
+  - **Response (200 OK)**:
+    ```json
+    {
+      "scan_id": "893d56b0-74e7-49f6-a83d-6b5e02e1fd4e",
+      "status": "completed",
+      "percent": 100
+    }
+    ```
+- **`GET /api/scan/{id}/report`**: Returns the detailed vulnerability findings, port states, and CVE mapping arrays in JSON.
 
 ---
 
