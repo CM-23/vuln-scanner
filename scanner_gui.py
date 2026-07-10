@@ -241,121 +241,38 @@ def make_gui():
             status_var.set("● IDLE"); status_lbl.config(fg=TEXT_DIM)
             return
 
-        # ── Header ─────────────────────────────────────────────
-        write("┌─────────────────────────────────────────────────┐\n", "dim")
-        write("│  VULNSC RECON ENGINE  ", "dim")
-        write("v2.0.1", "purple")
-        write("                        │\n", "dim")
-        write("└─────────────────────────────────────────────────┘\n", "dim")
-        write(f"\n  TARGET   ", "dim"); write(f"{url}\n", "bright")
-        write(f"  TIME     ", "dim"); write(f"{time.strftime('%Y-%m-%d %H:%M:%S')}\n\n", "dim")
-
-        # ── HTTPS check ────────────────────────────────────────
-        set_progress(10)
-        write("  [1/4]  ", "accent"); write("PROTOCOL CHECK\n", "bright")
-        if url.startswith("https://"):
-            write("         ✔  TLS/HTTPS", "green")
-            write("  — encrypted transport\n", "dim")
-        else:
-            write("         ✘  PLAIN HTTP", "red")
-            write("  — traffic is unencrypted!\n", "yellow")
-
-        host = url.replace("https://","").replace("http://","").split("/")[0]
-        write(f"         HOST  ", "dim"); write(f"{host}\n\n", "accent")
-
-        # ── Port scan ──────────────────────────────────────────
-        set_progress(30)
-        write("  [2/4]  ", "accent"); write("PORT SCAN\n", "bright")
         selected_ports = [p for p, v in port_vars.items() if v.get()]
-        open_ports   = []
-        closed_ports = []
+        if not selected_ports:
+            write("  ERROR  ", "red")
+            write(" Please select at least one port to scan.\n")
+            stop_spin()
+            status_var.set("● IDLE"); status_lbl.config(fg=TEXT_DIM)
+            return
 
-        for port in selected_ports:
-            try:
-                s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-                s.settimeout(1)
-                if s.connect_ex((host, port)) == 0:
-                    open_ports.append(port)
-                    write(f"         ◉  {port:<6}", "green")
-                    write("OPEN\n", "green")
-                else:
-                    closed_ports.append(port)
-                    write(f"         ○  {port:<6}", "dim")
-                    write("closed\n", "dim")
-                s.close()
-            except Exception:
-                write(f"         ?  {port:<6}", "yellow")
-                write("unreachable\n", "dim")
+        # Core thread-safe callbacks to write to GUI Text widget
+        def gui_log(text, tag=""):
+            root.after(0, lambda: write(text, tag))
+            
+        def gui_progress(pct):
+            root.after(0, lambda: set_progress(pct))
 
-        write(f"\n         Summary: ", "dim")
-        write(f"{len(open_ports)} open", "green")
-        write(f"  /  {len(closed_ports)} closed\n\n", "dim")
-
-        # ── Path scan ──────────────────────────────────────────
-        set_progress(60)
-        write("  [3/4]  ", "accent"); write("PATH DISCOVERY\n", "bright")
-        paths = ["/admin", "/login", "/wp-admin", "/dashboard",
-                 "/api", "/config", "/.env", "/backup"]
-        found = []
-
-        base = url.rstrip("/")
-        for path in paths:
-            try:
-                res = requests.get(base + path, timeout=4,
-                                   headers={"User-Agent": "Mozilla/5.0"},
-                                   allow_redirects=True)
-                code = res.status_code
-                if code == 200:
-                    found.append(path)
-                    write(f"         ◉  {path:<20}", "red")
-                    write(f"  {code} FOUND\n", "red")
-                elif code in (301, 302):
-                    write(f"         →  {path:<20}", "yellow")
-                    write(f"  {code} REDIRECT\n", "dim")
-                else:
-                    write(f"         ○  {path:<20}", "dim")
-                    write(f"  {code}\n", "dim")
-            except Exception:
-                write(f"         ×  {path:<20}", "dim")
-                write("  timeout\n", "dim")
-
-        write(f"\n         Exposed paths: ", "dim")
-        if found:
-            write(f"{len(found)} detected\n\n", "red")
-        else:
-            write("none detected\n\n", "green")
-
-        # ── Server info ────────────────────────────────────────
-        set_progress(85)
-        write("  [4/4]  ", "accent"); write("HEADER FINGERPRINTING\n", "bright")
         try:
-            res = requests.get(base, timeout=5,
-                               headers={"User-Agent": "Mozilla/5.0"})
-            interesting = ["Server","X-Powered-By","X-Frame-Options",
-                           "Content-Security-Policy","Strict-Transport-Security",
-                           "X-Content-Type-Options","Access-Control-Allow-Origin"]
-            for h in interesting:
-                val = res.headers.get(h)
-                if val:
-                    tag = "dim" if h in ("Server","X-Powered-By") else "green"
-                    write(f"         {h:<35}", "dim")
-                    write(f"{val[:50]}\n", tag)
-                else:
-                    write(f"         {h:<35}", "dim")
-                    write("—\n", "dim")
+            from scan_engine import ScanEngine
+            engine = ScanEngine(url, selected_ports, log_callback=gui_log, progress_callback=gui_progress)
+            stats = engine.execute_scan()
+            
+            # Completion UI updates
+            root.after(0, stop_spin)
+            root.after(0, lambda: status_var.set("● DONE"))
+            root.after(0, lambda: status_lbl.config(fg=GREEN))
+            
+            if stats.get('report_file'):
+                root.after(0, lambda: write(f"\n[+] HTML Threat Report Generated: reports/{stats['report_file']}\n", "green"))
         except Exception as e:
-            write(f"         Error: {e}\n", "red")
-
-        # ── Footer ─────────────────────────────────────────────
-        set_progress(100)
-        write("\n┌─────────────────────────────────────────────────┐\n", "dim")
-        write("│  ", "dim"); write("SCAN COMPLETE", "green")
-        write("                                   │\n", "dim")
-        write("└─────────────────────────────────────────────────┘\n", "dim")
-
-        stop_spin()
-        status_var.set("● DONE")
-        status_lbl.config(fg=GREEN)
+            root.after(0, stop_spin)
+            root.after(0, lambda: status_var.set("● ERROR"))
+            root.after(0, lambda: status_lbl.config(fg=RED))
+            root.after(0, lambda: write(f"\n[✘] Scan execution crashed: {e}\n", "red"))
 
     def start_scan():
         spin_tick()

@@ -1,88 +1,48 @@
-import socket
-import requests
+import sys
+from scan_engine import ScanEngine
 
-print("=== Simple Vulnerability Scanner ===")
-
-# Take input
-url = input("Enter website URL (include http/https): ")
-
-# ---------------------------
-# HTTPS CHECK
-# ---------------------------
-if url.startswith("https://"):
-    print("✅ Website is Secure (HTTPS)")
-else:
-    print("⚠️ Website is NOT Secure (HTTP)")
-
-# ---------------------------
-# EXTRACT HOSTNAME
-# ---------------------------
-host = url.replace("https://", "").replace("http://", "")
-host = host.split("/")[0]
-
-print("🌐 Host:", host)
-
-# ---------------------------
-# PORT SCANNING
-# ---------------------------
-print("\n🔍 Scanning common ports...")
-ports = [21, 22, 80, 443, 8080]
-
-open_ports = []
-
-for port in ports:
-    try:
-        sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        sock.settimeout(1)
-
-        result = sock.connect_ex((host, port))
-        if result == 0:
-            open_ports.append(port)
-
-        sock.close()
-    except:
-        pass
-
-if open_ports:
-    print("🔓 Open Ports:", open_ports)
-else:
-    print("🔒 No common ports open")
-
-# ---------------------------
-# SENSITIVE PATH SCAN
-# ---------------------------
-print("\n📂 Checking sensitive paths...")
-
-paths = ["/admin", "/login", "/backup", "/.git"]
-found_paths = []
-
-for path in paths:
-    try:
-        response = requests.get(url + path, timeout=3)
-        if response.status_code == 200:
-            found_paths.append(path)
-    except:
-        pass
-
-if found_paths:
-    print("⚠️ Sensitive paths found:", found_paths)
-else:
-    print("✅ No sensitive paths accessible")
-
-# ---------------------------
-# SERVER INFO
-# ---------------------------
-print("\n🧾 Fetching server information...")
-
-try:
-    response = requests.get(url, timeout=3)
-    server = response.headers.get("Server")
-
-    if server:
-        print("Server:", server)
+def main():
+    print("=================================================")
+    print("  VULNSC • CLI Security Recon Engine  v2.0.1")
+    print("=================================================")
+    
+    if len(sys.argv) > 1:
+        url = sys.argv[1]
     else:
-        print("Server info not disclosed")
-except:
-    print("Could not retrieve server information")
+        url = input("Enter website URL (include http/https): ").strip()
+        
+    if not url or url in ("http://", "https://", ""):
+        print("[-] Error: A valid target URL is required.")
+        sys.exit(1)
+        
+    ports_to_scan = [21, 22, 80, 443, 8080, 8443]
+    print(f"[i] Host: {url}")
+    print(f"[i] Ports to scan: {ports_to_scan}")
+    print("[i] Launching engine...\n")
+    
+    # Callback to stream real-time logs directly to stdout
+    def console_log(text, tag=""):
+        sys.stdout.write(text)
+        sys.stdout.flush()
+        
+    def progress_callback(pct):
+        pass
+        
+    engine = ScanEngine(url, ports_to_scan, log_callback=console_log, progress_callback=progress_callback)
+    stats = engine.execute_scan()
+    
+    print("\n=================================================")
+    print("  CLI REPORT SUMMARY")
+    print("=================================================")
+    print(f"Target Host:       {stats.get('host')}")
+    print(f"Assessed Threat:   {stats.get('threat_level')}")
+    print(f"Open Ports:        {stats.get('open_ports')}")
+    print(f"Exposed Paths:     {stats.get('exposed_paths')}")
+    print(f"Vulnerabilities:   {len(stats.get('vuln_findings', []))}")
+    print(f"CVE Mappings:      {len(stats.get('cve_results', []))}")
+    if stats.get('report_file'):
+        print(f"HTML Threat Report Saved: reports/{stats.get('report_file')}")
+    print("=================================================")
 
-print("\n=== Scan Complete ===")
+if __name__ == "__main__":
+    main()
