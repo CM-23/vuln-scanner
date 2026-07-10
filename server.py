@@ -7,7 +7,7 @@ import http.server
 import time
 import requests
 
-PORT = 80
+PORT = int(os.environ.get('PORT', 80))
 WEB_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'web')
 
 class VulnerabilityScannerHandler(http.server.BaseHTTPRequestHandler):
