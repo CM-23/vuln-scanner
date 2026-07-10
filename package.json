@@ -1,0 +1,17 @@
+{
+  "name": "vuln-scanner",
+  "version": "2.0.1",
+  "description": "VULNSC Vulnerability Scanner and Threat Intelligence Platform Web App",
+  "main": "server.py",
+  "scripts": {
+    "dev": "python server.py",
+    "start": "python server.py"
+  },
+  "keywords": [
+    "security",
+    "scanner",
+    "vulnerability"
+  ],
+  "author": "",
+  "license": "ISC"
+}

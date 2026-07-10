@@ -1,0 +1,263 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>VULNSC • Threat Intelligence Dashboard</title>
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=Outfit:wght@300;400;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="cyber-grid"></div>
+    
+    <div class="container">
+        <!-- HEADER -->
+        <header class="app-header">
+            <div class="brand">
+                <div class="brand-logo">
+                    <svg viewBox="0 0 24 24" width="28" height="28" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path>
+                    </svg>
+                </div>
+                <div class="brand-text">
+                    <h1>VULNSC</h1>
+                    <span class="sub-badge">[ THREAT INTELLIGENCE ENGINE v2.0.1 ]</span>
+                </div>
+            </div>
+            <div class="system-status">
+                <div class="status-indicator idle" id="global-status-indicator"></div>
+                <span id="global-status-text">SYSTEM IDLE</span>
+            </div>
+        </header>
+
+        <!-- MAIN LAYOUT -->
+        <main class="dashboard-layout">
+            <!-- INPUT CONTROLS -->
+            <section class="card control-card">
+                <div class="control-grid">
+                    <div class="input-group url-input-group">
+                        <label for="target-url">TARGET URL</label>
+                        <div class="url-input-wrapper">
+                            <span class="url-icon">🌐</span>
+                            <input type="text" id="target-url" value="https://example.com" placeholder="https://example.com">
+                        </div>
+                    </div>
+                    
+                    <div class="input-group ports-input-group">
+                        <label>PORTS TO SCAN</label>
+                        <div class="port-pills">
+                            <label class="port-pill">
+                                <input type="checkbox" value="21" name="ports">
+                                <span>21 (FTP)</span>
+                            </label>
+                            <label class="port-pill">
+                                <input type="checkbox" value="22" name="ports">
+                                <span>22 (SSH)</span>
+                            </label>
+                            <label class="port-pill">
+                                <input type="checkbox" value="80" name="ports" checked>
+                                <span>80 (HTTP)</span>
+                            </label>
+                            <label class="port-pill">
+                                <input type="checkbox" value="443" name="ports" checked>
+                                <span>443 (HTTPS)</span>
+                            </label>
+                            <label class="port-pill">
+                                <input type="checkbox" value="8080" name="ports">
+                                <span>8080 (ALT)</span>
+                            </label>
+                            <label class="port-pill">
+                                <input type="checkbox" value="8443" name="ports">
+                                <span>8443 (ALT-S)</span>
+                            </label>
+                        </div>
+                    </div>
+
+                    <div class="action-group">
+                        <button class="btn btn-primary" id="btn-scan">
+                            <span class="btn-text">INITIATE SCAN</span>
+                            <span class="btn-glow"></span>
+                        </button>
+                        <button class="btn btn-secondary" id="btn-clear">CLEAR</button>
+                    </div>
+                </div>
+            </section>
+
+            <!-- METRICS WIDGETS -->
+            <section class="metrics-grid">
+                <div class="metric-card" id="metric-protocol">
+                    <div class="metric-icon">
+                        <svg viewBox="0 0 24 24" width="24" height="24" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round">
+                            <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
+                            <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
+                        </svg>
+                    </div>
+                    <div class="metric-info">
+                        <h3>PROTOCOL SECURITY</h3>
+                        <div class="metric-value" id="val-protocol">—</div>
+                        <p class="metric-label" id="lbl-protocol">Awaiting scan initiation</p>
+                    </div>
+                </div>
+
+                <div class="metric-card" id="metric-ports">
+                    <div class="metric-icon">
+                        <svg viewBox="0 0 24 24" width="24" height="24" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round">
+                            <circle cx="12" cy="12" r="3"></circle>
+                            <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
+                        </svg>
+                    </div>
+                    <div class="metric-info">
+                        <h3>OPEN PORTS</h3>
+                        <div class="metric-value" id="val-ports">—</div>
+                        <p class="metric-label" id="lbl-ports">Awaiting scan initiation</p>
+                    </div>
+                </div>
+
+                <div class="metric-card" id="metric-paths">
+                    <div class="metric-icon">
+                        <svg viewBox="0 0 24 24" width="24" height="24" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path>
+                        </svg>
+                    </div>
+                    <div class="metric-info">
+                        <h3>EXPOSED PATHS</h3>
+                        <div class="metric-value" id="val-paths">—</div>
+                        <p class="metric-label" id="lbl-paths">Awaiting scan initiation</p>
+                    </div>
+                </div>
+
+                <div class="metric-card" id="metric-threat">
+                    <div class="metric-icon">
+                        <svg viewBox="0 0 24 24" width="24" height="24" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path>
+                            <line x1="12" y1="9" x2="12" y2="13"></line>
+                            <line x1="12" y1="17" x2="12.01" y2="17"></line>
+                        </svg>
+                    </div>
+                    <div class="metric-info">
+                        <h3>THREAT ASSESSMENT</h3>
+                        <div class="metric-value" id="val-threat">—</div>
+                        <p class="metric-label" id="lbl-threat">Awaiting scan initiation</p>
+                    </div>
+                </div>
+            </section>
+
+            <!-- PROGRESS BAR -->
+            <section class="progress-section hidden" id="scan-progress-container">
+                <div class="progress-bar-label">
+                    <span>SCAN CONTEXT PIPELINE</span>
+                    <span id="scan-progress-percentage">0%</span>
+                </div>
+                <div class="progress-track">
+                    <div class="progress-fill" id="scan-progress-fill"></div>
+                </div>
+            </section>
+
+            <!-- SPLIT PANELS -->
+            <div class="dashboard-split">
+                <!-- TERMINAL PANEL -->
+                <section class="card terminal-card">
+                    <div class="card-header">
+                        <div class="window-dots">
+                            <span class="dot red"></span>
+                            <span class="dot yellow"></span>
+                            <span class="dot green"></span>
+                        </div>
+                        <h2>TERMINAL CONSOLE STREAM</h2>
+                    </div>
+                    <div class="terminal-body">
+                        <div class="terminal-scanline"></div>
+                        <div class="terminal-content" id="terminal-output">
+                            <div class="log-line dim">VULNSC Threat Intelligence Platform  —  Ready</div>
+                            <div class="log-line dim">Enter a target URL above and click INITIATE SCAN.</div>
+                            <div class="log-line cursor-line"><span class="terminal-cursor"></span></div>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- DETAILS PANEL -->
+                <section class="card details-card">
+                    <div class="card-header">
+                        <h2>VULNERABILITY FINDINGS & DETAILS</h2>
+                    </div>
+                    <div class="details-body">
+                        <!-- TABS -->
+                        <div class="details-tabs">
+                            <button class="tab-btn active" data-tab="tab-headers">HEADERS</button>
+                            <button class="tab-btn" data-tab="tab-ports">PORTS</button>
+                            <button class="tab-btn" data-tab="tab-paths">PATHS</button>
+                        </div>
+
+                        <!-- TAB CONTENT -->
+                        <div class="tab-contents">
+                            <!-- HEADERS TAB -->
+                            <div class="tab-panel active" id="tab-headers">
+                                <div class="table-wrapper">
+                                    <table class="findings-table">
+                                        <thead>
+                                            <tr>
+                                                <th>SECURITY HEADER</th>
+                                                <th>VALUE</th>
+                                                <th>STATUS</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody id="headers-table-body">
+                                            <tr>
+                                                <td colspan="3" class="empty-state">No headers analyzed yet.</td>
+                                            </tr>
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+
+                            <!-- PORTS TAB -->
+                            <div class="tab-panel" id="tab-ports">
+                                <div class="table-wrapper">
+                                    <table class="findings-table">
+                                        <thead>
+                                            <tr>
+                                                <th>PORT</th>
+                                                <th>SERVICE</th>
+                                                <th>STATUS</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody id="ports-table-body">
+                                            <tr>
+                                                <td colspan="3" class="empty-state">No ports scanned yet.</td>
+                                            </tr>
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+
+                            <!-- PATHS TAB -->
+                            <div class="tab-panel" id="tab-paths">
+                                <div class="table-wrapper">
+                                    <table class="findings-table">
+                                        <thead>
+                                            <tr>
+                                                <th>PATH / DIRECTORY</th>
+                                                <th>STATUS / RESPONSE CODE</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody id="paths-table-body">
+                                            <tr>
+                                                <td colspan="2" class="empty-state">No path discovery results yet.</td>
+                                            </tr>
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </section>
+            </div>
+        </main>
+    </div>
+    
+    <script src="app.js"></script>
+</body>
+</html>
