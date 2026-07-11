@@ -1,5 +1,7 @@
 # 🛡️ VULNSC - Threat Intelligence & Vulnerability Scanner
 
+[![Live Demo](https://img.shields.io/badge/Demo-Live%20on%20Render-brightgreen?style=for-the-badge&logo=render)](https://vuln-scanner-romc.onrender.com/)
+
 A Python-based vulnerability scanner with a modern web dashboard, desktop GUI, and CLI support. 
 Designed for basic reconnaissance, port scanning, and web security analysis.
 
@@ -59,6 +61,13 @@ VULNSC includes a programmatic REST API that can be consumed directly without th
 ---
 
 ## 🚀 How to Run
+
+### 🌐 Live Demo (No Installation Required)
+
+Access the live, fully deployed cyber dashboard directly on Render:
+👉 **[vuln-scanner-romc.onrender.com](https://vuln-scanner-romc.onrender.com/)**
+
+---
 
 ### 1. Web Dashboard (Runs in Chrome/Edge/Firefox)
 
